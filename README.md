@@ -1,155 +1,162 @@
 # Brimful
 
-Fill idle weekly Claude usage with your own backlog work, so nothing resets unused.
+**Stop wasting your weekly Claude limit. Fill it with your own work, and never lose a task to a limit again.**
 
-Most usage tools only *tell* you that you wasted budget. Brimful is built to *spend*
-that idle budget on a backlog of real work you wanted done anyway. It runs fully
-local, on your own Claude limit, with no external API and no hosted backend.
+Most weeks you do not use your full Claude allowance. It resets and the unused part is gone. Other times a limit cuts off a task mid-way and you have to babysit the restart. Brimful fixes both, running entirely on your own limit with effectively zero overhead.
 
-## Zero-overhead by design
+- **Fill idle budget** - when you are under pace and idle, Brimful drains a backlog of your real, deferrable work into the budget that would otherwise reset unused.
+- **Auto-resume** - if a usage limit interrupts a task, Brimful continues it automatically the moment your window reopens. No manual restart.
+- **Zero token overhead** - all the watching, measuring, and scheduling runs as plain scripts outside the model. Tokens are spent only on real work.
 
-The meter is plain Node, run outside the model, so it costs **zero tokens**. The
-model is only ever invoked to do actual backlog work, never to watch the gauge.
+---
+
+## How it works
+
+Brimful reads the usage numbers Claude Code already exposes (the same ones behind `/usage`) and your local session logs. From those it knows, for free:
+
+- how much of your weekly limit you have used,
+- how fast you are pacing toward the reset,
+- when your 5-hour and weekly windows reset.
+
+A small scheduler checks this on a timer. When it makes sense, it launches a real Claude task. When it does not, it does nothing. That is the whole idea.
+
+---
+
+## Requirements
+
+- **Claude Code** v2.1.80 or newer
+- A **Claude Pro or Max** subscription (official usage numbers are not exposed for API-key auth)
+- **Node.js** 18+
+
+---
 
 ## Install
 
-### One command
+```bash
+git clone https://github.com/ansh0108/brimful.git
+cd brimful
+./install.sh --with-cron
+```
+
+That command:
+
+1. creates your state dir at `~/.brimful`,
+2. wires Brimful's status line (backing up your settings first),
+3. schedules the background dispatcher every 30 minutes.
+
+Then **restart Claude Code** so the status line starts capturing your official usage numbers.
+
+> Your data (config, backlog, logs) lives in `~/.brimful`, separate from the code, so updates never wipe it.
+
+---
+
+## Use it
+
+### 1. Check your pacing anytime
 
 ```bash
-./install.sh            # or: ./install.sh --with-cron
+node scripts/brimful.mjs report
 ```
 
-This creates the state dir `~/.brimful`, seeds your config and backlog, wires the
-statusLine (backing up your settings first), and prints how to schedule the
-dispatcher. Re-runnable and safe.
+Shows usage this week, how far under or over pace you are, and how much budget is on track to reset unused.
 
-State (config, backlog, queue, logs) lives in `~/.brimful`, separate from the plugin
-code, so plugin updates never wipe your data. Override the location with
-`BRIMFUL_HOME`.
+Prefer a slash command? Drop this into `~/.claude/commands/budget.md`:
 
-### As a Claude Code plugin (for the `/budget` command)
+```md
+---
+description: Show this week's Claude usage pacing (Brimful).
+allowed-tools: Bash(node:*)
+---
+Show the output verbatim.
 
-```
-/plugin marketplace add <your-repo-url>
-/plugin install brimful
-```
-
-Then run `./install.sh` once to wire the statusLine and state dir.
-
-## Official numbers (recommended, automatic)
-
-Claude Code (>= 2.1.80, Pro/Max) feeds the statusLine command an official
-`rate_limits` object with `five_hour` and `seven_day` percentages and reset times.
-Brimful captures these for free and uses them as the source of truth.
-
-Wire it once in `~/.claude/settings.json`:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "node /absolute/path/to/brimful/scripts/statusline.mjs",
-    "padding": 0
-  }
-}
+!`node /absolute/path/to/brimful/scripts/brimful.mjs report`
 ```
 
-After that, Brimful auto-derives your reset day/hour and auto-calibrates the cap from
-the official weekly %. No manual steps. It also gets the exact 5-hour reset time, so
-`resume add` needs no `--after`. Check it with `node scripts/brimful.mjs status`.
+Then just type `/budget` in Claude Code.
 
-Notes: the data appears only after the first response in a session and only for
-subscriber auth (not API keys). Between sessions the cache goes stale and Brimful
-falls back to its calibrated estimate.
+### 2. Add work to your backlog
 
-## Manual calibration (fallback)
+Edit `~/.brimful/backlog.md`. One task per line:
 
-If you cannot use the statusLine, calibrate once from `/usage`:
+```
+- [1] Update README and codemaps @/Users/you/projects/my-app (M)
+- [2] Add unit tests for the auth module @/Users/you/projects/api (L)
+```
 
-1. Run `/usage`, read the weekly % for "All models".
-2. `node scripts/brimful.mjs calibrate <pct>`   (e.g. `calibrate 17`)
+- lower priority number runs first
+- `@/path` is the repo the task runs in
+- only put **real, deferrable** work here; an empty backlog is fine
 
-Brimful divides your week-to-date weighted tokens by that percentage to estimate the
-cap. Re-run any week it drifts; it self-corrects.
+When you are idle and under pace, the dispatcher picks the top item and works it to completion.
+
+### 3. Auto-resume an interrupted task
+
+If a limit stops you mid-task, register it (it auto-uses your official 5-hour reset time):
+
+```bash
+node scripts/brimful.mjs resume add --dir "$(pwd)"
+```
+
+The dispatcher continues it when your window reopens. Launching long tasks with `bin/brimful-run.sh -p "..."` registers them automatically.
+
+---
 
 ## Commands
 
-| Command | What it does | Tokens |
-| --- | --- | --- |
-| `report` | Week-to-date usage, pace vs target, wasted-budget headroom | 0 |
-| `calibrate <pct>` | Pin the weekly cap from your `/usage` % | 0 |
-| `pace` | One-line machine-readable signal for schedulers | 0 |
-| `config` | Print resolved config | 0 |
-
-## Config (`config.json`)
-
-| Key | Meaning |
+| Command | What it does |
 | --- | --- |
-| `resetDayOfWeek` | 0=Sun .. 6=Sat. Your weekly reset day (read from `/usage`). |
-| `resetHour` | Local hour of reset. |
-| `targetPct` | How full to aim for. Stays below 100 for safety. |
-| `capWeightedTokens` | Set by `calibrate`. |
-| `weights` | Cost-style weights so the token measure tracks Anthropic metering. |
+| `brimful.mjs report` | Usage and pacing for the week |
+| `brimful.mjs status` | Raw official numbers from the status line |
+| `brimful.mjs calibrate <pct>` | Manual cap calibration (fallback only) |
+| `brimful.mjs resume add --dir <path>` | Queue an interrupted task to auto-resume |
+| `brimful.mjs resume list` / `clear` | Manage the resume queue |
+| `dispatch.mjs tick --dry-run` | See what the scheduler would do, free |
+| `dispatch.mjs watch [secs]` | Run the scheduler in the foreground |
 
-## Backlog
+---
 
-`backlog.md` holds deferrable, genuinely useful tasks. Only real work belongs there.
-Empty backlog means let the budget reset. That is fine.
+## Safety
 
-Format: `- [priority] description @/optional/repo (size)`. Lower priority number runs
-first. The `@/path` tells the dispatcher which repo to run the task in.
+Brimful is conservative by design:
 
-## Resume interrupted tasks
+- **Idle check** - never competes with you; it pauses while you are actively working.
+- **Hard stop** - stops at 85% of your weekly limit so automation cannot lock you out.
+- **Pause switch** - `touch ~/.brimful/.brimful-pause` halts everything (`rm` to resume).
+- **Caps** - every task loop has iteration, time, and no-progress limits.
 
-If the limit cuts off a task mid-way, Brimful can finish it the instant the window
-reopens, with no manual restart.
+---
 
-- Auto path: launch long tasks with `bin/brimful-run.sh -p "..."`. If a limit stops
-  it, the wrapper parses the reset time and queues a resume job by itself.
-- Manual path: when you get cut off, run
-  `node scripts/brimful.mjs resume add --dir "$(pwd)" --after "11:30am"`.
+## Configuration
 
-Either way the dispatcher continues it with `claude -c` once the window is open.
-Waiting is plain code, so it costs nothing until the work actually resumes.
+Everything is in `~/.brimful/config.json`. Useful keys:
 
-## Dispatcher
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `targetPct` | How full to aim for (stays below 100) | `85` |
+| `idleMinutes` | Minutes of quiet before draining backlog | `15` |
+| `maxIterations` | Continue-turns per task | `12` |
+| `maxRunMinutes` | Wall-clock cap per task | `180` |
 
-The dispatcher decides, for free, what to do each cycle:
+Reset day, hour, and the usage cap are detected automatically from your official numbers.
 
-1. Resume any interrupted task whose window has reopened.
-2. Otherwise drain the top backlog item, but only if calibrated, under pace, below
-   target, and idle (no Claude use in the last `idleMinutes`).
-3. Otherwise hold.
+---
 
-Both resume and drain run as a **loop**: Brimful keeps issuing continue-turns until
-the task prints the done sentinel, hits the limit again (it re-queues itself for the
-next window), or trips a safety cap (`maxIterations`, `maxRunMinutes`, a no-progress
-stall, or the `targetPct` budget stop). A task can therefore span several reset
-windows and still finish. Completed backlog items are recorded so they never rerun.
+## How it stays free
+
+The meter and scheduler are plain Node, run by cron and the status line, never by the model. They read files and do arithmetic. The only time Brimful spends your limit is when it launches a real task you wanted done. So it can only ever convert waste into work, never the reverse.
+
+---
+
+## Uninstall
 
 ```bash
-node scripts/dispatch.mjs tick --dry-run   # decide and print, never launches claude
-node scripts/dispatch.mjs tick             # one real cycle (cron-friendly)
-node scripts/dispatch.mjs watch 900        # loop every 15 min (launchd/tmux)
+rm -rf ~/.brimful
+cp ~/.claude/settings.json.brimful-bak ~/.claude/settings.json   # restore status line
+crontab -e   # remove the brimful line
 ```
 
-Guardrails: a lockfile prevents overlap, a `.brimful-pause` file halts everything,
-and it hard-stops at `targetPct` so automation never locks you out.
+---
 
-### Schedule it (cron)
+## License
 
-Cron runs the free check on its own; tokens are spent only when real work launches.
-
-```cron
-# every 30 minutes
-*/30 * * * * /usr/local/bin/node /Users/you/Desktop/brimful/scripts/dispatch.mjs tick >> /Users/you/Desktop/brimful/dispatch.log 2>&1
-```
-
-## Roadmap
-
-- [x] Step 1: zero-token meter + calibration (`report`, `calibrate`, `pace`)
-- [x] Step 2: dispatcher with resume + backlog drain, guardrails, dry-run, wrapper
-- [x] Step 3: official statusLine numbers, auto-calibration, auto reset schedule, 5h-aware resume
-- [x] Step 4: public packaging (marketplace manifest, installer, `~/.brimful` state dir)
-- [x] Step 5: multi-turn task loop (continue to done, re-queue across windows, safety caps)
-- [ ] Live resume test (when a real limit interrupts a task)
+MIT
