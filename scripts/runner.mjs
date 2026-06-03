@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
-import { computeState, parseWhen } from "./lib.mjs";
+import { computeState, parseWhen, resolveClaudeBin } from "./lib.mjs";
 import { LOG_PATH } from "./paths.mjs";
 
 export function log(msg) {
@@ -26,7 +26,8 @@ export function parseLimitReset(text, now = new Date()) {
 }
 
 function runOnce(cfg, cwd, args, dryRun) {
-  const display = `${cfg.claudeBin} ${args
+  const bin = resolveClaudeBin(cfg);
+  const display = `${bin} ${args
     .map((a) => (a.includes(" ") ? `"${a.slice(0, 60)}..."` : a))
     .join(" ")}  (cwd: ${cwd})`;
   if (dryRun) {
@@ -34,7 +35,7 @@ function runOnce(cfg, cwd, args, dryRun) {
     return { dryRun: true, stdout: "", stderr: "" };
   }
   log(`launching: ${display}`);
-  const res = spawnSync(cfg.claudeBin, args, {
+  const res = spawnSync(bin, args, {
     cwd,
     encoding: "utf8",
     timeout: (cfg.maxRunMinutes || 180) * 60000,

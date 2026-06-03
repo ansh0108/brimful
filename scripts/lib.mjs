@@ -391,5 +391,41 @@ export function readBacklog() {
   return items;
 }
 
+// Resolve a working `claude` binary. Cron and non-login shells often lack it on
+// PATH, and the macOS install path is version-stamped (changes on update), so we
+// search known locations and pick the newest versioned binary. Override by setting
+// an absolute `claudeBin` in config.
+export function resolveClaudeBin(cfg) {
+  const want = cfg?.claudeBin || "claude";
+  if (want.includes("/") && fs.existsSync(want)) return want;
+
+  const candidates = [
+    path.join(HOME, ".local/bin/claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+
+  // macOS app install: .../Claude/claude-code/<version>/claude.app/Contents/MacOS/claude
+  const base = path.join(HOME, "Library/Application Support/Claude/claude-code");
+  try {
+    const versions = fs
+      .readdirSync(base)
+      .map((v) => v.split(".").map((n) => parseInt(n, 10)))
+      .filter((p) => p.every(Number.isFinite))
+      .sort((a, b) => b[0] - a[0] || b[1] - a[1] || b[2] - a[2])
+      .map((p) => p.join("."));
+    for (const v of versions) {
+      const bin = path.join(base, v, "claude.app/Contents/MacOS/claude");
+      if (fs.existsSync(bin)) return bin;
+    }
+  } catch {
+    /* not macOS app install */
+  }
+  return want; // fall back to bare name; PATH may still have it
+}
+
 export const fmt = (n) => Math.round(n).toLocaleString("en-US");
 export const pct = (n) => `${Number(n).toFixed(1)}%`;
