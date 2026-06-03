@@ -1,0 +1,19 @@
+{
+  "name": "brimful",
+  "owner": {
+    "name": "Ansh Dasrapuria"
+  },
+  "metadata": {
+    "description": "Brimful: fill idle weekly Claude usage with your own backlog work, and auto-resume tasks interrupted by limits. Runs local, on your own limit, zero token overhead.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "brimful",
+      "source": "./",
+      "description": "A zero-token meter, an off-peak backlog dispatcher, and auto-resume after limit resets. Uses official statusLine rate-limit numbers.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}

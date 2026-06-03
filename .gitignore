@@ -1,0 +1,10 @@
+# User state lives in ~/.brimful, not in the repo. These are local-only seeds.
+config.json
+backlog.md
+resume-queue.json
+usage.json
+dispatch.log
+.dispatch.lock
+.brimful-pause
+node_modules/
+*.log

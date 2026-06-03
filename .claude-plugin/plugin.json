@@ -1,0 +1,6 @@
+{
+  "name": "brimful",
+  "version": "0.1.0",
+  "description": "Fill idle weekly Claude usage with your own backlog work, and auto-resume tasks interrupted by limits. Runs local, zero token overhead.",
+  "author": "Ansh Dasrapuria"
+}
