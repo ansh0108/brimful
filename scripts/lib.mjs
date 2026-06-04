@@ -36,6 +36,10 @@ export const DEFAULT_CONFIG = {
   calibratedAtPct: null,
   // Dispatcher guardrails.
   idleMinutes: 15, // Skip backlog drain if you used Claude in the last N minutes.
+  // Only drain the backlog during these local hours, so routine work runs off-peak
+  // (overnight) and never eats your prime-time session window. Wraps past midnight.
+  // Resume jobs ignore this - an interrupted task continues whenever its window opens.
+  quietHours: { enabled: true, start: 1, end: 7 },
   claudeBin: "claude", // Override if `claude` is not on PATH.
   defaultWorkdir: HOME, // Where a backlog task runs if it names no @dir.
   // How recent the official snapshot must be to use as a live anchor (6h).
@@ -222,6 +226,15 @@ export function applyOfficial(cfg) {
 
   if (changed) saveConfig(cfg);
   return { applied: true, changed, ...applied };
+}
+
+// Is `now` inside the configured off-peak window? Handles wraparound (e.g. 23-6).
+export function inQuietHours(cfg, now = new Date()) {
+  const q = cfg.quietHours;
+  if (!q || q.enabled === false) return true;
+  const h = now.getHours();
+  if (q.start === q.end) return true; // full day
+  return q.start < q.end ? h >= q.start && h < q.end : h >= q.start || h < q.end;
 }
 
 export function computeState(cfg) {

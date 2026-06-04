@@ -14,7 +14,7 @@
 
 import fs from "node:fs";
 import { LOCK_PATH, PAUSE_PATH } from "./paths.mjs";
-import { loadConfig, computeState, loadQueue, saveQueue, readBacklog, markDone } from "./lib.mjs";
+import { loadConfig, computeState, loadQueue, saveQueue, readBacklog, markDone, inQuietHours } from "./lib.mjs";
 import { runTaskLoop, log } from "./runner.mjs";
 
 const LOCK_STALE_MS = 6 * 3600 * 1000;
@@ -104,6 +104,8 @@ function tryDrain(cfg, dryRun) {
   if (s.usedPct >= cfg.targetPct) return log(`drain skipped: at ${s.usedPct.toFixed(1)}% >= target ${cfg.targetPct}%.`), false;
   if (s.deltaPct >= 0) return log(`drain skipped: on pace (delta ${s.deltaPct.toFixed(1)}%).`), false;
   if (s.idleMinutes < cfg.idleMinutes) return log(`drain skipped: active ${s.idleMinutes.toFixed(1)}m ago.`), false;
+  if (!inQuietHours(cfg, s.now))
+    return log(`drain skipped: outside quiet hours (${cfg.quietHours.start}:00-${cfg.quietHours.end}:00).`), false;
 
   const backlog = readBacklog();
   if (!backlog.length) return log("drain skipped: backlog empty (good problem)."), false;
