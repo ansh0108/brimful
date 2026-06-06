@@ -29,6 +29,7 @@ export const QUEUE_PATH = path.join(DATA_DIR, "resume-queue.json");
 export const BACKLOG_PATH = path.join(DATA_DIR, "backlog.md");
 export const USAGE_CACHE_PATH = path.join(DATA_DIR, "usage.json");
 export const DONE_LOG_PATH = path.join(DATA_DIR, "done.log");
+export const ROUTINES_DIR = path.join(DATA_DIR, "routines");
 export const LOG_PATH = path.join(DATA_DIR, "dispatch.log");
 export const LOCK_PATH = path.join(DATA_DIR, ".dispatch.lock");
 export const PAUSE_PATH = path.join(DATA_DIR, ".brimful-pause");
